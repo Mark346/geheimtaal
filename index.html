@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Geheimtaal">
+<meta name="theme-color" content="#0f1226">
+<title>Geheimtaal Maker</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f1226;
+    color: #f2f3ff;
+    min-height: 100vh;
+    padding: max(20px, env(safe-area-inset-top)) 16px 40px;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 4px 0 4px; }
+  .sub { color: #9aa0c8; margin: 0 0 20px; font-size: 15px; }
+
+  .label { font-size: 13px; font-weight: 700; color: #9aa0c8; text-transform: uppercase; letter-spacing: .5px; margin: 18px 0 8px; }
+
+  .codes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .code {
+    background: #1b1f3d; border: 2px solid #1b1f3d; border-radius: 14px;
+    padding: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer;
+  }
+  .code b { display: block; font-size: 16px; }
+  .code span { font-size: 13px; color: #9aa0c8; }
+  .code.active { border-color: #7c5cff; background: #262a55; }
+
+  .key { background: #1b1f3d; border-radius: 14px; padding: 12px 14px; margin-top: 10px; display: none; }
+  .key.show { display: block; }
+  .key-row { display: flex; justify-content: space-between; font-size: 15px; margin-bottom: 6px; }
+  input[type=range] { width: 100%; accent-color: #7c5cff; }
+
+  textarea {
+    width: 100%; min-height: 110px; resize: vertical;
+    background: #1b1f3d; color: #f2f3ff; border: 2px solid #2a2f5c; border-radius: 14px;
+    padding: 12px; font: inherit; font-size: 17px;
+  }
+  textarea:focus { outline: none; border-color: #7c5cff; }
+
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  button.big {
+    border: none; border-radius: 14px; padding: 15px; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer;
+  }
+  .lock { background: #7c5cff; color: white; }
+  .unlock { background: #2ec4a6; color: #0f1226; }
+
+  .result {
+    background: #1b1f3d; border-radius: 14px; padding: 14px; min-height: 70px;
+    font-size: 18px; word-break: break-word; white-space: pre-wrap;
+  }
+  .result.empty { color: #5d6390; font-size: 15px; }
+
+  .small-buttons { display: flex; gap: 10px; margin-top: 10px; }
+  .small-buttons button {
+    flex: 1; background: #262a55; color: #f2f3ff; border: none; border-radius: 12px;
+    padding: 11px; font: inherit; font-size: 15px; cursor: pointer;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+    background: #2ec4a6; color: #0f1226; font-weight: 700; padding: 10px 18px; border-radius: 20px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🕵️ Geheimtaal Maker</h1>
+  <p class="sub">Maak een geheim bericht en stuur het naar een vriend.</p>
+
+  <div class="label">1. Kies een code</div>
+  <div class="codes">
+    <button class="code active" data-code="schuif"><b>🔢 Schuifcode</b><span>Letters schuiven op</span></button>
+    <button class="code" data-code="emoji"><b>😎 Emoji-code</b><span>Letters worden emoji's</span></button>
+    <button class="code" data-code="getal"><b>🔟 Getallencode</b><span>A=1, B=2, C=3…</span></button>
+    <button class="code" data-code="spiegel"><b>🪞 Spiegelcode</b><span>Alles achterstevoren</span></button>
+  </div>
+
+  <div class="key show" id="keyBox">
+    <div class="key-row"><span>Geheime sleutel</span><b id="keyVal">3</b></div>
+    <input type="range" id="key" min="1" max="25" value="3">
+    <div style="font-size:13px;color:#9aa0c8;margin-top:4px">Je vriend moet hetzelfde getal gebruiken om het te ontcijferen.</div>
+  </div>
+
+  <div class="label">2. Typ je bericht</div>
+  <textarea id="input" placeholder="Typ hier je bericht…"></textarea>
+
+  <div class="buttons">
+    <button class="big lock" id="encode">🔒 Versleutel</button>
+    <button class="big unlock" id="decode">🔓 Ontcijfer</button>
+  </div>
+
+  <div class="label">3. Resultaat</div>
+  <div class="result empty" id="result">Hier komt je geheime bericht…</div>
+  <div class="small-buttons">
+    <button id="copy">📋 Kopieer</button>
+    <button id="share">📤 Deel</button>
+    <button id="clear">🗑️ Wis</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  let code = "schuif";
+
+  const emojis = ["🍎","🍌","🐱","🐶","🥚","🐸","🦒","🏠","🍦","🧃","🔑","🦁","🌙","🥜","🐙","🐧","👑","🌈","⭐","🌳","🦄","🌋","🐳","❌","🪀","🦓"];
+  const abc = "abcdefghijklmnopqrstuvwxyz";
+
+  // Schuifcode: elke letter een aantal plekken opschuiven
+  function schuif(text, n) {
+    return text.replace(/[a-z]/gi, ch => {
+      const start = ch === ch.toUpperCase() ? 65 : 97;
+      return String.fromCharCode((ch.charCodeAt(0) - start + n + 26) % 26 + start);
+    });
+  }
+
+  function naarEmoji(text) {
+    return Array.from(text.toLowerCase()).map(ch => {
+      const i = abc.indexOf(ch);
+      return i >= 0 ? emojis[i] : ch;
+    }).join("");
+  }
+  function vanEmoji(text) {
+    return Array.from(text).map(ch => {
+      const i = emojis.indexOf(ch);
+      return i >= 0 ? abc[i] : ch;
+    }).join("");
+  }
+
+  function naarGetal(text) {
+    return text.toLowerCase().split(" ").map(woord =>
+      Array.from(woord).map(ch => {
+        const i = abc.indexOf(ch);
+        return i >= 0 ? i + 1 : ch;
+      }).join("-")
+    ).join(" / ");
+  }
+  function vanGetal(text) {
+    return text.split("/").map(woord =>
+      woord.trim().split("-").map(stuk => {
+        const n = parseInt(stuk, 10);
+        return n >= 1 && n <= 26 && String(n) === stuk.trim() ? abc[n - 1] : stuk.trim();
+      }).join("")
+    ).join(" ");
+  }
+
+  function spiegel(text) {
+    return Array.from(text).reverse().join("");
+  }
+
+  function maak(versleutel) {
+    const text = document.getElementById("input").value;
+    if (!text.trim()) { toast("Typ eerst een bericht ✏️"); return; }
+    const n = parseInt(document.getElementById("key").value, 10);
+    let uit;
+    if (code === "schuif")  uit = schuif(text, versleutel ? n : -n);
+    if (code === "emoji")   uit = versleutel ? naarEmoji(text) : vanEmoji(text);
+    if (code === "getal")   uit = versleutel ? naarGetal(text) : vanGetal(text);
+    if (code === "spiegel") uit = spiegel(text);
+    const r = document.getElementById("result");
+    r.textContent = uit;
+    r.classList.remove("empty");
+  }
+
+  document.querySelectorAll(".code").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".code").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      code = btn.dataset.code;
+      document.getElementById("keyBox").classList.toggle("show", code === "schuif");
+    });
+  });
+
+  document.getElementById("key").addEventListener("input", e => {
+    document.getElementById("keyVal").textContent = e.target.value;
+  });
+
+  document.getElementById("encode").addEventListener("click", () => maak(true));
+  document.getElementById("decode").addEventListener("click", () => maak(false));
+
+  function resultaat() {
+    const r = document.getElementById("result");
+    return r.classList.contains("empty") ? "" : r.textContent;
+  }
+
+  document.getElementById("copy").addEventListener("click", async () => {
+    const t = resultaat();
+    if (!t) { toast("Nog niks om te kopiëren"); return; }
+    try { await navigator.clipboard.writeText(t); toast("Gekopieerd ✅"); }
+    catch { toast("Kopiëren lukte niet"); }
+  });
+
+  document.getElementById("share").addEventListener("click", async () => {
+    const t = resultaat();
+    if (!t) { toast("Nog niks om te delen"); return; }
+    if (navigator.share) {
+      try { await navigator.share({ text: t }); } catch {}
+    } else {
+      try { await navigator.clipboard.writeText(t); toast("Gekopieerd, plak het in een chat"); }
+      catch { toast("Delen lukte niet"); }
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", () => {
+    document.getElementById("input").value = "";
+    const r = document.getElementById("result");
+    r.textContent = "Hier komt je geheime bericht…";
+    r.classList.add("empty");
+  });
+
+  function toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), 1600);
+  }
+</script>
+</body>
+</html>
